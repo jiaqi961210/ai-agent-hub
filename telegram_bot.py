@@ -50,6 +50,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/todo [instruction] - Manage your tasks\n"
         "/ask [question] - Ask the supervisor anything\n"
         "/research [idea] - Market research on ideas\n"
+        "/health [question] - Doc: healthcare research & advice\n"
         "/kk [question] - KK Agent: system insights & agent reviews\n"
         "/status - Check system health & agent activity\n\n"
         "Or just send me any message and I'll route it to the right agent!"
@@ -100,6 +101,17 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     from agents.research_agent import ResearchAgent
     agent = ResearchAgent()
+    result = agent.run(query)
+    await send_long_message(update, result)
+
+
+async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /health command — Doc agent for healthcare research."""
+    query = " ".join(context.args) if context.args else "give me an overview of the current care plan and recommendations for grandpa"
+    await update.message.reply_text("Doc is researching... (this may take a moment for thorough answers)")
+
+    from agents.health_agent import HealthAgent
+    agent = HealthAgent()
     result = agent.run(query)
     await send_long_message(update, result)
 
@@ -199,6 +211,7 @@ def main():
     app.add_handler(CommandHandler("todo", todo_command))
     app.add_handler(CommandHandler("ask", ask_command))
     app.add_handler(CommandHandler("research", research_command))
+    app.add_handler(CommandHandler("health", health_command))
     app.add_handler(CommandHandler("kk", kk_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("review", review_command))

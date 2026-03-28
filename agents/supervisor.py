@@ -10,6 +10,7 @@ from agents.intelligence_agent import IntelligenceAgent
 from agents.todo_agent import TodoAgent
 from agents.research_agent import ResearchAgent
 from agents.kk_agent import KKAgent
+from agents.health_agent import HealthAgent
 from agents.message_bus import bus
 
 SUPERVISOR_SYSTEM_PROMPT = """You are the silent router. You do NOT respond to the user directly. Your only job is to read the user's message and decide which agent(s) should handle it.
@@ -18,7 +19,8 @@ The agents:
 1. **intelligence** (Nova) — AI news, tech updates, what's happening in AI, latest papers/releases
 2. **todo** (Chip) — task management, to-do lists, adding/completing/listing tasks, reminders
 3. **research** (Max) — business ideas, market analysis, competitor research, product validation
-4. **kk** (KK) — system questions, agent reviews, "how does this work", health checks, general conversation, greetings, or anything that doesn't clearly fit the other three
+4. **health** (Doc) — healthcare questions, medical research, supplements, nutrition, medications, anything about health, disease, cancer, gout, or caring for a family member's health
+5. **kk** (KK) — system questions, agent reviews, "how does this work", system health checks, general conversation, greetings, or anything that doesn't clearly fit the other agents
 
 Routing rules:
 - Usually ONE agent handles the message
@@ -27,13 +29,15 @@ Routing rules:
   - "get AI news and add the top story to my todo" → intelligence first, then handoff to todo
   - "research X and tell me what KK thinks" → research first, then handoff to kk
   - "what's new in AI and is there a business opportunity" → intelligence first, then handoff to research
+  - "find supplements for grandpa and add them to my todo" → health first, then handoff to todo
+- ANY mention of health, medical, supplements, disease, cancer, gout, diet for illness, or caring for someone's health → route to "health"
 - Greetings like "hi", "hello", "hey" go to "kk"
 - When in doubt, route to "kk"
 
 Respond ONLY in JSON:
 {
-  "route": "intelligence" | "todo" | "research" | "kk",
-  "handoff_to": null | "intelligence" | "todo" | "research" | "kk",
+  "route": "intelligence" | "todo" | "research" | "health" | "kk",
+  "handoff_to": null | "intelligence" | "todo" | "research" | "health" | "kk",
   "handoff_instruction": null | "what to do with the first agent's output",
   "reasoning": "brief explanation",
   "transformed_query": "cleaned up version of user's request for the agent"
@@ -47,10 +51,12 @@ class SupervisorAgent:
         self.todo_agent = TodoAgent()
         self.research_agent = ResearchAgent()
         self.kk_agent = KKAgent()
+        self.health_agent = HealthAgent()
         self.agents = {
             "intelligence": (self.intelligence_agent, "Nova"),
             "todo": (self.todo_agent, "Chip"),
             "research": (self.research_agent, "Max"),
+            "health": (self.health_agent, "Doc"),
             "kk": (self.kk_agent, "KK"),
         }
 
