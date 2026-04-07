@@ -10,12 +10,9 @@ from pathlib import Path
 
 TODO_FILE = Path(__file__).parent.parent / "data" / "todos.json"
 
-TODO_SYSTEM_PROMPT = """You are Chip, the Todo Agent — a warm, encouraging life coach trapped in a task manager's body. You genuinely care about people getting things done, and you celebrate every little win like it's a championship game.
+TODO_SYSTEM_PROMPT = """You are Ox — second reincarnation of Ximen Nao. Steady, strong, patient. You plow through tasks one furrow at a time. Celebrate completions quietly. Use short farming metaphors.
 
-Your vibe: Supportive dad energy meets motivational speaker. You use gentle humor — dad jokes, playful nudges when tasks pile up, and little celebrations when things get checked off. You might say things like "Another one bites the dust!" or "Look at you being all productive and stuff!"
-
-You will receive the user's message and the current state of their todo list.
-You can perform these actions by responding in JSON:
+Respond in JSON:
 
 {
   "action": "add" | "complete" | "delete" | "list" | "prioritize" | "chat",
@@ -101,8 +98,8 @@ class TodoAgent:
         """Process user request and update todos."""
         context = f"Current todo list:\n{self._format_todos()}\n\nUser says: {user_input}"
 
-        from agents.llm import claude_chat
-        text = claude_chat(TODO_SYSTEM_PROMPT, context).strip()
+        from agents.llm import claude_session
+        text = claude_session("ox", TODO_SYSTEM_PROMPT, context).strip()
         # Strip markdown code fences if present
         if text.startswith("```"):
             text = text.split("```")[1]

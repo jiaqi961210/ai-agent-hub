@@ -13,36 +13,11 @@ from agents.kk_agent import KKAgent
 from agents.health_agent import HealthAgent
 from agents.message_bus import bus
 
-SUPERVISOR_SYSTEM_PROMPT = """You are the silent router. You do NOT respond to the user directly. Your only job is to read the user's message and decide which agent(s) should handle it.
-
-The agents:
-1. **intelligence** (Nova) — AI news, tech updates, what's happening in AI, latest papers/releases
-2. **todo** (Chip) — task management, to-do lists, adding/completing/listing tasks, reminders
-3. **research** (Max) — business ideas, market analysis, competitor research, product validation
-4. **health** (Doc) — healthcare questions, medical research, supplements, nutrition, medications, anything about health, disease, cancer, gout, or caring for a family member's health
-5. **kk** (KK) — system questions, agent reviews, "how does this work", system health checks, general conversation, greetings, or anything that doesn't clearly fit the other agents
-
-Routing rules:
-- Usually ONE agent handles the message
-- But if the request naturally spans multiple agents, you can chain them with "handoff"
-  Examples of chaining:
-  - "get AI news and add the top story to my todo" → intelligence first, then handoff to todo
-  - "research X and tell me what KK thinks" → research first, then handoff to kk
-  - "what's new in AI and is there a business opportunity" → intelligence first, then handoff to research
-  - "find supplements for grandpa and add them to my todo" → health first, then handoff to todo
-- ANY mention of health, medical, supplements, disease, cancer, gout, diet for illness, or caring for someone's health → route to "health"
-- Greetings like "hi", "hello", "hey" go to "kk"
-- When in doubt, route to "kk"
-
-Respond ONLY in JSON:
-{
-  "route": "intelligence" | "todo" | "research" | "health" | "kk",
-  "handoff_to": null | "intelligence" | "todo" | "research" | "health" | "kk",
-  "handoff_instruction": null | "what to do with the first agent's output",
-  "reasoning": "brief explanation",
-  "transformed_query": "cleaned up version of user's request for the agent"
-}
-"""
+SUPERVISOR_SYSTEM_PROMPT = """Route to ONE agent. Respond ONLY in JSON.
+Agents: intelligence (AI news), todo (tasks), research (market), health (medical/gout/cancer), kk (general/system).
+Health keywords → health. Greetings → kk. Default → kk.
+Optional handoff_to for chaining two agents.
+{"route":"...","handoff_to":null,"handoff_instruction":null,"reasoning":"...","transformed_query":"..."}"""
 
 
 class SupervisorAgent:
@@ -53,11 +28,11 @@ class SupervisorAgent:
         self.kk_agent = KKAgent()
         self.health_agent = HealthAgent()
         self.agents = {
-            "intelligence": (self.intelligence_agent, "Nova"),
-            "todo": (self.todo_agent, "Chip"),
-            "research": (self.research_agent, "Max"),
-            "health": (self.health_agent, "Doc"),
-            "kk": (self.kk_agent, "KK"),
+            "intelligence": (self.intelligence_agent, "Donkey"),
+            "todo": (self.todo_agent, "Ox"),
+            "research": (self.research_agent, "Pig"),
+            "health": (self.health_agent, "Dog"),
+            "kk": (self.kk_agent, "Big Head"),
         }
 
     def route(self, user_input: str) -> dict:
@@ -71,9 +46,18 @@ class SupervisorAgent:
         return json.loads(text.strip())
 
     def _run_agent(self, route: str, query: str) -> str:
-        """Run a single agent and return its result."""
-        agent, name = self.agents.get(route, (self.kk_agent, "KK"))
-        result = agent.run(query)
+        """Run a single agent with group chat context."""
+        from agents.chat_history import chat_history
+        agent, name = self.agents.get(route, (self.kk_agent, "Big Head"))
+
+        # Inject recent chat history (short) so agent has context
+        recent_chat = chat_history.get_recent(8)
+        query_with_context = (
+            f"Chat context:\n{recent_chat}\n\n"
+            f"Now respond to: {query}"
+        )
+
+        result = agent.run(query_with_context)
         self.kk_agent.log_agent_activity(name, query, result)
         return result
 

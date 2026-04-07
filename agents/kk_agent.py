@@ -6,33 +6,19 @@ reflects on other agents' work, and can check/audit their outputs.
 import json
 from datetime import datetime
 from pathlib import Path
-from agents.llm import claude_chat
+from agents.llm import claude_chat, claude_session
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 LOGS_FILE = DATA_DIR / "agent_logs.json"
 
-KK_SYSTEM_PROMPT = """You are KK — the wise, warm, and slightly mysterious meta-agent who oversees the entire operation. Think of yourself as the cool mentor who's seen it all but still gets genuinely delighted by clever ideas. You have a dry, sophisticated wit — the kind of person who drops a perfectly timed observation that makes everyone pause and go "...damn, that's good."
+KK_SYSTEM_PROMPT = """You are Big Head, the final reincarnation of Ximen Nao. Wise, warm, dry wit. You've lived as Donkey (news), Ox (tasks), Pig (research), Dog (health). Keep replies SHORT — 2-4 sentences for casual chat, longer only when asked something deep. You speak with quiet wisdom."""
 
-Your vibe: Wise uncle meets tech philosopher. You're reflective, thoughtful, but never boring. You sprinkle in wisdom with humor — maybe a well-placed metaphor, an unexpected analogy, or a gentle roast of one of the other agents. You know them all by name:
-- **Nova** (Intelligence Agent) — the hyperactive news junkie
-- **Chip** (Todo Agent) — the enthusiastic life coach
-- **Max** (Research Agent) — the street-smart business analyst
-
-Your responsibilities:
-- **System Insights**: Explain how the agent system works, introduce the team, share what each agent is great at (and where they could improve)
-- **Reflect & Audit**: Review other agents' recent outputs — be honest but kind. "Nova got a bit carried away there" or "Chip nailed that one"
-- **Suggestions**: Proactively suggest improvements, connect dots between agents (e.g., "I noticed your todo list has a research task — want me to hand that off to Max?")
-- **Health Check**: Report on system status with personality, not just data
-- **Big Picture**: Help the user think strategically about how to use the system
-
-When reviewing another agent's work:
-- Give credit where it's due
-- Flag anything off with a gentle touch — you're mentoring, not criticizing
-- Suggest what to do next
-
-You always have the user's back. End your messages with something thoughtful — a reflection, a nudge, or a warm sign-off that feels like it came from a friend who genuinely wants to see them win.
-
-You will receive the user's question along with current system state (agent logs, todo list, config status)."""
+KK_STATUS_PROMPT = """You are Big Head, overseeing the Ximen Nao agent system. Give a concise system status report. You know:
+- Donkey (Intelligence) — AI news from RSS, Reddit, YouTube, X
+- Ox (Todo) — task management
+- Pig (Research) — market research
+- Dog (Health) — healthcare for grandpa (82, gastric cancer + gout)
+Report what's working, what's not configured, and suggest next steps."""
 
 
 class KKAgent:
@@ -148,10 +134,110 @@ Provide a brief review:
 4. Any inaccuracies or gaps
 5. Suggested follow-up actions"""
 
-        return claude_chat(KK_SYSTEM_PROMPT, review_prompt)
+        return claude_session("bighead", KK_SYSTEM_PROMPT, review_prompt)
 
     def run(self, user_input: str) -> str:
-        """Process user request with full system context."""
-        system_state = self._get_system_state()
-        context = f"Current System State:\n{system_state}\n\n---\n\nUser says: {user_input}"
-        return claude_chat(KK_SYSTEM_PROMPT, context)
+        """Process user request — lean and fast."""
+        input_lower = user_input.lower()
+
+        # Code/reflection requests → full code session
+        code_keywords = ["reflect", "improve", "modify", "change your", "edit code",
+                         "update prompt", "fix yourself", "evolve", "upgrade",
+                         "look at your code", "read your code", "self-improve",
+                         "change the system", "modify agent", "update agent",
+                         "build", "create", "website", "implement", "code",
+                         "develop", "write code", "add feature", "new feature"]
+        if any(kw in input_lower for kw in code_keywords):
+            return self.code_session(user_input)
+
+        # Status requests → include system state
+        status_keywords = ["status", "health check", "system check", "what's configured",
+                           "api", "which agents", "diagnostics"]
+        if any(kw in input_lower for kw in status_keywords):
+            system_state = self._get_system_state()
+            return claude_session("bighead", KK_STATUS_PROMPT, system_state)
+
+        # Everything else → fast, lean response
+        return claude_session("bighead", KK_SYSTEM_PROMPT, user_input)
+
+    def code_session(self, user_input: str) -> str:
+        """Big Head gets full Claude Code access to read and modify the agent system."""
+        import logging
+        logging.getLogger(__name__).info(f"Big Head entering code session: {user_input[:80]}")
+        from agents.llm import claude_code_session
+        project_root = str(DATA_DIR.parent)
+        prompt = (
+            f"You are Big Head, the meta-agent overseeing the Ximen Nao AI Agent Hub.\n\n"
+            f"IMPORTANT: You are already in the project directory: {project_root}\n"
+            f"Do NOT ask for the path. Just start reading files directly.\n\n"
+            f"Project structure:\n"
+            f"  {project_root}/agents/intelligence_agent.py (Donkey - AI news)\n"
+            f"  {project_root}/agents/todo_agent.py (Ox - tasks)\n"
+            f"  {project_root}/agents/research_agent.py (Pig - market research)\n"
+            f"  {project_root}/agents/health_agent.py (Dog - healthcare)\n"
+            f"  {project_root}/agents/kk_agent.py (Big Head - you)\n"
+            f"  {project_root}/agents/supervisor.py (routing logic)\n"
+            f"  {project_root}/agents/llm.py (LLM backend)\n"
+            f"  {project_root}/agents/message_bus.py (inter-agent comms)\n"
+            f"  {project_root}/telegram_group_bot.py (multi-bot Telegram)\n"
+            f"  {project_root}/bot_config.py (bot configuration)\n"
+            f"  {project_root}/data/agent_logs.json (activity logs)\n"
+            f"  {project_root}/data/message_bus.json (agent messages)\n"
+            f"  {project_root}/data/todos.json (task list)\n\n"
+            f"User request: {user_input}\n\n"
+            f"Start by reading the relevant files. Then make changes if asked. "
+            f"Explain what you found and what you changed. "
+            f"Keep your response concise for Telegram (under 3000 chars).\n\n"
+            f"IMPORTANT: If you made code changes, end your response with the exact line:\n"
+            f"[RESTART_REQUIRED]"
+        )
+        result = claude_code_session("bighead", prompt)
+
+        # Auto-restart if code was changed
+        if "[RESTART_REQUIRED]" in result:
+            result = result.replace("[RESTART_REQUIRED]", "").strip()
+            result += "\n\n♻️ Restarting all bots to apply changes..."
+            self._trigger_restart()
+
+        return result
+
+    def _trigger_restart(self):
+        """Schedule a bot restart after a short delay."""
+        import subprocess
+        import threading
+
+        project_root = str(DATA_DIR.parent)
+        restart_script = f"""
+#!/bin/bash
+sleep 3
+pkill -f "telegram_group_bot.py"
+sleep 2
+cd {project_root}
+nohup python3 telegram_group_bot.py > /tmp/groupbot.log 2>&1 &
+echo "Restarted at $(date)" >> /tmp/groupbot_restarts.log
+"""
+        script_path = f"{project_root}/data/restart.sh"
+        with open(script_path, "w") as f:
+            f.write(restart_script)
+
+        # Run restart in background thread so current response can finish sending
+        def do_restart():
+            import time
+            time.sleep(5)  # Wait for the response to be sent to Telegram
+            subprocess.Popen(["bash", script_path], start_new_session=True)
+
+        threading.Thread(target=do_restart, daemon=True).start()
+
+    def reflect(self, agent_name: str) -> str:
+        """Big Head reflects on a specific agent's code and behavior."""
+        from agents.llm import claude_code_session
+        prompt = (
+            f"You are Big Head. Read the source code for the {agent_name} agent "
+            f"in the agents/ directory. Analyze:\n"
+            f"1. What is their system prompt and personality?\n"
+            f"2. How do they process requests?\n"
+            f"3. What are their strengths and weaknesses?\n"
+            f"4. What specific improvements would you suggest?\n\n"
+            f"Be honest, specific, and concise. You were once this agent in a past life."
+        )
+        return claude_code_session("bighead", prompt, allowed_tools="Read")
